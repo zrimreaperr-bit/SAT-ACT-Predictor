@@ -67,32 +67,30 @@ def generate_explanation(band, adm_rate, sat_pos, student_sat, low, high):
         base = (f"This school only admits {adm_rate*100:.1f}% of applicants, so it's "
                 f"classified as a Reach regardless of your score — very few applicants "
                 f"get in here even with top academics.")
-        if sat_pos is not None:
-            if sat_pos >= 75:
-                base += f" For reference, your SAT is still comfortably above their typical admitted range."
-            elif sat_pos < 0:
-                base += f" Your SAT is also below their typical admitted range, adding to the gap."
+        if low is not None and high is not None:
+            if student_sat > high:
+                base += " For reference, your SAT is still above their typical admitted range."
+            elif student_sat < low:
+                base += " Your SAT is also below their typical admitted range, adding to the gap."
         return base
 
     if sat_pos is None or low is None or high is None:
         return ("This school doesn't publicly report a full SAT range (often true for "
                 "test-optional schools), so we can't precisely place your score here.")
 
-    if band == "Safety":
+    if student_sat < low:
+        gap = round(low - student_sat)
+        rate_note = f", and their admit rate is {adm_rate*100:.1f}%." if pd.notna(adm_rate) else "."
+        return (f"Your SAT is about {gap} points below this school's 25th-percentile "
+                f"admit score ({int(low)}){rate_note}")
+    elif student_sat > high:
         gap = round(student_sat - high)
         return (f"Your SAT is about {gap} points above this school's 75th-percentile "
-                f"admit score ({int(high)}), putting you comfortably above most "
-                f"admitted students.")
-    elif band == "Match":
+                f"admit score ({int(high)}), putting you above most admitted students.")
+    else:
         return (f"Your SAT of {student_sat} falls within this school's typical admitted "
-                f"range ({int(low)}–{int(high)}), alongside most admitted students.")
-    else:  # Reach
-        gap = round(low - student_sat)
-        return (f"Your SAT is about {gap} points below this school's 25th-percentile "
-                f"admit score ({int(low)}), and their admit rate is "
-                f"{adm_rate*100:.1f}%." if pd.notna(adm_rate) else
-                f"Your SAT is about {gap} points below this school's 25th-percentile "
-                f"admit score ({int(low)}).")
+                f"range ({int(low)}–{int(high)}), at roughly the {round(sat_pos)}th "
+                f"percentile of that range.")
 
 
 def evaluate_schools(df, school_names, student_sat, comp_score):
