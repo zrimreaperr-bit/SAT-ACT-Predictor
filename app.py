@@ -21,7 +21,7 @@ from college_predictor import (
 )
 
 st.set_page_config(page_title="College Fit Predictor", layout="wide")
-st.title("SAT/ACT College Fit Predictor")
+st.title("🎓 College Fit Predictor")
 st.caption("Based on College Scorecard data. Composite score = 45% SAT/ACT + 35% GPA + 20% Extracurriculars.")
 
 DATA_PATH = "Unidata.xlsx"  # bundle this file alongside app.py
@@ -61,23 +61,64 @@ with st.sidebar:
     run = st.button("Calculate my chances", type="primary", use_container_width=True)
 
 
+def generate_explanation(band, adm_rate, sat_pos, student_sat, low, high):
+    """Plain-language reasoning behind the Reach/Match/Safety label."""
+    if adm_rate is not None and pd.notna(adm_rate) and adm_rate < 0.15:
+        base = (f"This school only admits {adm_rate*100:.1f}% of applicants, so it's "
+                f"classified as a Reach regardless of your score — very few applicants "
+                f"get in here even with top academics.")
+        if sat_pos is not None:
+            if sat_pos >= 75:
+                base += f" For reference, your SAT is still comfortably above their typical admitted range."
+            elif sat_pos < 0:
+                base += f" Your SAT is also below their typical admitted range, adding to the gap."
+        return base
+
+    if sat_pos is None or low is None or high is None:
+        return ("This school doesn't publicly report a full SAT range (often true for "
+                "test-optional schools), so we can't precisely place your score here.")
+
+    if band == "Safety":
+        gap = round(student_sat - high)
+        return (f"Your SAT is about {gap} points above this school's 75th-percentile "
+                f"admit score ({int(high)}), putting you comfortably above most "
+                f"admitted students.")
+    elif band == "Match":
+        return (f"Your SAT of {student_sat} falls within this school's typical admitted "
+                f"range ({int(low)}–{int(high)}), alongside most admitted students.")
+    else:  # Reach
+        gap = round(low - student_sat)
+        return (f"Your SAT is about {gap} points below this school's 25th-percentile "
+                f"admit score ({int(low)}), and their admit rate is "
+                f"{adm_rate*100:.1f}%." if pd.notna(adm_rate) else
+                f"Your SAT is about {gap} points below this school's 25th-percentile "
+                f"admit score ({int(low)}).")
+
+
 def evaluate_schools(df, school_names, student_sat, comp_score):
     results = []
     for name in school_names:
         row = df[df["INSTNM"] == name].iloc[0]
-        sat_pos = sat_percentile_position(
-            student_sat, row.get("SATVR25"), row.get("SATVR75"),
-            row.get("SATMT25"), row.get("SATMT75"),
-        )
+        satvr25, satvr75 = row.get("SATVR25"), row.get("SATVR75")
+        satmt25, satmt75 = row.get("SATMT25"), row.get("SATMT75")
+        sat_pos = sat_percentile_position(student_sat, satvr25, satvr75, satmt25, satmt75)
         band = classify_school(row.get("ADM_RATE"), sat_pos)
         sat_avg = row.get("SAT_AVG")
         adm_rate = row.get("ADM_RATE")
         chart_x = normalize_sat(sat_avg) if pd.notna(sat_avg) else None
         chart_y = (1 - adm_rate) * 100 if pd.notna(adm_rate) else None
+
+        low = high = None
+        if pd.notna(satvr25) and pd.notna(satmt25) and pd.notna(satvr75) and pd.notna(satmt75):
+            low = float(satvr25) + float(satmt25)
+            high = float(satvr75) + float(satmt75)
+
+        explanation = generate_explanation(band, adm_rate, sat_pos, student_sat, low, high)
+
         results.append({
             "school": row["INSTNM"], "adm_rate": adm_rate, "sat_avg_admitted": sat_avg,
             "student_sat_position_pct": sat_pos, "band": band,
-            "chart_x": chart_x, "chart_y": chart_y,
+            "chart_x": chart_x, "chart_y": chart_y, "explanation": explanation,
         })
     return results
 
@@ -130,5 +171,6 @@ if run:
                 c2.write(f"Avg admit SAT: {int(r['sat_avg_admitted'])}" if pd.notna(r['sat_avg_admitted']) else "Avg admit SAT: N/A")
                 pos = r['student_sat_position_pct']
                 c3.write(f"Your position: {pos} (relative to 25th-75th admitted range)" if pos is not None else "Your position: N/A")
+                st.caption(f"💡 {r['explanation']}")
 else:
     st.info("Fill in your info and pick a few colleges in the sidebar, then click **Calculate my chances**.")
