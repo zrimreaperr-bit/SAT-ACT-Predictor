@@ -21,7 +21,7 @@ from college_predictor import (
 )
 
 st.set_page_config(page_title="College Fit Predictor", layout="wide")
-st.title("🎓 College Fit Predictor")
+st.title("SAT/ACT College Fit Predictor")
 st.caption("Based on College Scorecard data. Composite score = 45% SAT/ACT + 35% GPA + 20% Extracurriculars.")
 
 DATA_PATH = "Unidata.xlsx"  # bundle this file alongside app.py
